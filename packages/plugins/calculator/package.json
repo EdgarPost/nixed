@@ -1,0 +1,61 @@
+{
+  "name": "@nixed/plugin-calculator",
+  "version": "0.1.0",
+  "description": "Calculator plugin for Nixed",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "nixed": {
+    "id": "calculator",
+    "name": "Calculator",
+    "description": "Evaluate mathematical expressions",
+    "version": "0.1.0",
+    "author": "Nixed Team",
+    "icon": "🔢",
+    "commands": [
+      {
+        "name": "calculate",
+        "title": "Calculate",
+        "description": "Evaluate mathematical expressions",
+        "mode": "view",
+        "shortcut": "=",
+        "keywords": ["math", "calc", "calculator"]
+      }
+    ],
+    "preferences": [
+      {
+        "id": "precision",
+        "title": "Decimal Precision",
+        "description": "Number of decimal places to show",
+        "type": "number",
+        "default": 6,
+        "min": 0,
+        "max": 15
+      },
+      {
+        "id": "copyOnSelect",
+        "title": "Copy Result on Select",
+        "description": "Automatically copy result to clipboard when selected",
+        "type": "checkbox",
+        "default": true,
+        "label": "Copy to clipboard"
+      }
+    ]
+  },
+  "dependencies": {
+    "@nixed/sdk": "workspace:*",
+    "mathjs": "^12.0.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.8",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
