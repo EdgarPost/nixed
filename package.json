@@ -1,0 +1,25 @@
+{
+  "name": "nixed",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A modern, extensible application launcher built with Tauri",
+  "type": "module",
+  "scripts": {
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "build": "pnpm -r build",
+    "type-check": "pnpm -r type-check"
+  },
+  "keywords": [
+    "launcher",
+    "tauri",
+    "monorepo",
+    "plugins"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
