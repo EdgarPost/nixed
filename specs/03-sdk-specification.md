@@ -121,9 +121,10 @@ export type CommandMode = 'view' | 'no-view';
 
 ```typescript
 /**
- * Base preference definition
+ * SIMPLIFIED: Plugin preference definition
+ * Start with basic JSON values, add type safety incrementally as needed
  */
-interface BasePreference {
+export interface PluginPreference {
   /** Unique preference identifier */
   id: string;
 
@@ -133,80 +134,30 @@ interface BasePreference {
   /** Detailed description */
   description: string;
 
+  /** Preference type */
+  type: 'text' | 'password' | 'checkbox' | 'dropdown' | 'number';
+
+  /** Default value */
+  default?: unknown;
+
   /** Whether this preference is required */
   required?: boolean;
+
+  /** Additional metadata (for dropdown options, number min/max, etc.) */
+  metadata?: {
+    placeholder?: string;
+    label?: string;
+    options?: Array<{ label: string; value: string }>;
+    min?: number;
+    max?: number;
+    step?: number;
+  };
 }
 
 /**
- * Text input preference
+ * Runtime preference values are stored as JSON-compatible types
  */
-export interface TextPreference extends BasePreference {
-  type: 'text';
-  default?: string;
-  placeholder?: string;
-}
-
-/**
- * Password input preference
- */
-export interface PasswordPreference extends BasePreference {
-  type: 'password';
-  default?: string;
-}
-
-/**
- * Checkbox preference
- */
-export interface CheckboxPreference extends BasePreference {
-  type: 'checkbox';
-  default?: boolean;
-  label: string;
-}
-
-/**
- * Dropdown preference
- */
-export interface DropdownPreference extends BasePreference {
-  type: 'dropdown';
-  default?: string;
-  options: Array<{ label: string; value: string }>;
-}
-
-/**
- * Number input preference
- */
-export interface NumberPreference extends BasePreference {
-  type: 'number';
-  default?: number;
-  min?: number;
-  max?: number;
-  step?: number;
-}
-
-/**
- * Union type for all preference types
- */
-export type PluginPreference =
-  | TextPreference
-  | PasswordPreference
-  | CheckboxPreference
-  | DropdownPreference
-  | NumberPreference;
-
-/**
- * Type-safe preference value getter
- */
-export type PreferenceValue<T extends PluginPreference> = T extends TextPreference
-  ? string
-  : T extends PasswordPreference
-  ? string
-  : T extends CheckboxPreference
-  ? boolean
-  : T extends DropdownPreference
-  ? string
-  : T extends NumberPreference
-  ? number
-  : never;
+export type PreferenceValues = Record<string, unknown>;
 ```
 
 ### types/search.types.ts
@@ -355,6 +306,7 @@ import { invoke } from './internal/ipc';
 export interface ClipboardItem {
   id: string;
   content: string;
+  /** Timestamp in RFC3339/ISO 8601 format (e.g., "2025-10-22T15:30:00Z") */
   timestamp: string;
 }
 
@@ -559,30 +511,29 @@ export const ui = {
 ```typescript
 import { useContext } from 'react';
 import { PluginContext } from '../types';
-import { PreferenceValue, PluginPreference } from '../types/preferences.types';
+import type { PreferenceValues } from '../types/preferences.types';
 
 /**
  * Hook to access plugin preferences
+ * SIMPLIFIED: Returns Record<string, unknown> for runtime values
  * @returns Plugin preferences object
  */
-export function usePreferences<T extends Record<string, PluginPreference>>(): {
-  [K in keyof T]: PreferenceValue<T[K]>;
-} {
+export function usePreferences(): PreferenceValues {
   const context = useContext(PluginContextReact);
 
   if (!context) {
     throw new Error('usePreferences must be used within a PluginProvider');
   }
 
-  return context.preferences as never;
+  return context.preferences;
 }
 
 /**
  * Hook to access a specific preference
  * @param key - Preference key
- * @returns Preference value
+ * @returns Preference value (cast to expected type)
  */
-export function usePreference<T>(key: string): T {
+export function usePreference<T = unknown>(key: string): T {
   const preferences = usePreferences();
   return preferences[key] as T;
 }
@@ -667,36 +618,42 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 ### internal/context.ts
 
 ```typescript
-import { createContext } from 'react';
+import { createContext, useContext } from 'react';
 import type { PluginContext } from '../types';
 
 /**
  * Plugin context (React)
+ * FIX: Use React Context exclusively instead of global variable
  */
 export const PluginContextReact = createContext<PluginContext | null>(null);
 
 /**
- * Current plugin ID (set by plugin loader)
- */
-let currentPluginId: string | null = null;
-
-/**
- * Set current plugin ID
- * @internal Called by plugin loader
- */
-export function setPluginId(id: string): void {
-  currentPluginId = id;
-}
-
-/**
- * Get current plugin ID
+ * Get current plugin ID from React context
  * @internal Used by SDK APIs
  */
 export function getPluginId(): string {
-  if (!currentPluginId) {
-    throw new Error('Plugin ID not set. Ensure plugin is properly loaded.');
+  // This will be called from within React components that have PluginProvider
+  // For use outside components, plugin ID should be passed explicitly
+  const context = useContext(PluginContextReact);
+
+  if (!context) {
+    throw new Error('Plugin context not available. Ensure component is wrapped with PluginProvider.');
   }
-  return currentPluginId;
+
+  return context.pluginId;
+}
+
+/**
+ * Hook to get plugin context
+ */
+export function usePluginContext(): PluginContext {
+  const context = useContext(PluginContextReact);
+
+  if (!context) {
+    throw new Error('usePluginContext must be used within a PluginProvider');
+  }
+
+  return context;
 }
 ```
 

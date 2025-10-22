@@ -194,16 +194,28 @@ export class PluginLoader {
 
   /**
    * Load a plugin by ID
-   * Dynamically imports the plugin module and instantiates it
+   * FIX: Use import.meta.glob for dynamic discovery
    */
   async loadPlugin(pluginId: string): Promise<Plugin> {
     try {
-      // Dynamic import based on plugin ID
-      // This assumes plugins are bundled with the app
-      const module = await import(`../../plugins/${pluginId}/src/index`);
+      // Use Vite's import.meta.glob to discover all plugin entry points
+      const pluginModules = import.meta.glob<{ default: Plugin }>(
+        '../../plugins/*/src/index.{ts,tsx}',
+        { eager: false }
+      );
 
-      // Plugin should export default Plugin instance
-      const plugin = module.default as Plugin;
+      // Find the matching plugin
+      const modulePath = Object.keys(pluginModules).find((path) =>
+        path.includes(`/plugins/${pluginId}/`)
+      );
+
+      if (!modulePath) {
+        throw new Error(`Plugin "${pluginId}" not found`);
+      }
+
+      // Load the module
+      const module = await pluginModules[modulePath]!();
+      const plugin = module.default;
 
       if (!plugin || typeof plugin !== 'object') {
         throw new Error('Plugin must export a default Plugin object');
@@ -283,23 +295,30 @@ export class PluginLoader {
 
   /**
    * Get embedded plugin metadata
-   * In production, this would read from a generated manifest file
+   * FIX: Use dynamic import.meta.glob for true plugin discovery
+   * Vite will statically analyze this at build time
    */
   private async getEmbeddedPluginMetadata(): Promise<PluginManifest[]> {
-    // This would be generated at build time
-    // For now, manually list plugins
-    const pluginIds = ['clipboard', 'calculator', 'web-search'];
-
     const manifests: PluginManifest[] = [];
 
-    for (const id of pluginIds) {
+    // Use Vite's import.meta.glob for automatic plugin discovery
+    // This will find all package.json files in plugins directory
+    const pluginManifests = import.meta.glob('../../plugins/*/package.json', {
+      eager: false,
+      import: 'default',
+    });
+
+    for (const [path, importFn] of Object.entries(pluginManifests)) {
       try {
-        const pkg = await import(`../../plugins/${id}/package.json`);
+        const pkg = (await (importFn as () => Promise<{ nixed?: PluginManifest }>)());
+
         if (pkg.nixed) {
-          manifests.push(pkg.nixed as PluginManifest);
+          manifests.push(pkg.nixed);
+        } else {
+          console.warn(`Plugin at ${path} missing "nixed" manifest in package.json`);
         }
       } catch (error) {
-        console.warn(`Failed to load manifest for plugin "${id}":`, error);
+        console.error(`Failed to load manifest from ${path}:`, error);
       }
     }
 
@@ -482,6 +501,34 @@ export class PluginRegistry {
   getErrors(): PluginError[] {
     return this.state.errors;
   }
+
+  /**
+   * Shutdown registry and unload all plugins
+   * FIX: Add cleanup method to call onUnload for all plugins
+   */
+  async shutdown(): Promise<void> {
+    const unloadPromises: Promise<void>[] = [];
+
+    for (const [pluginId, plugin] of this.state.plugins.entries()) {
+      if (plugin.instance.onUnload) {
+        const unloadPromise = (async () => {
+          try {
+            await plugin.instance.onUnload!();
+            console.log(`Plugin "${pluginId}" unloaded successfully`);
+          } catch (error) {
+            console.error(`Plugin "${pluginId}" onUnload failed:`, error);
+          }
+        })();
+        unloadPromises.push(unloadPromise);
+      }
+    }
+
+    await Promise.all(unloadPromises);
+    this.state.plugins.clear();
+    this.state.initialized = false;
+
+    console.log('Plugin registry shutdown complete');
+  }
 }
 ```
 
@@ -608,6 +655,8 @@ export class SearchEngine {
 
   /**
    * Calculate text matching score
+   * SIMPLIFIED: Start with exact and substring matching only
+   * Add fuzzy search later if needed
    */
   private calculateTextScore(result: RankedSearchResult, context: SearchContext): number {
     const query = (context.args || context.query).toLowerCase();
@@ -619,48 +668,28 @@ export class SearchEngine {
     const title = result.title.toLowerCase();
     const subtitle = result.subtitle?.toLowerCase() || '';
 
-    // Exact match
+    // Exact match (highest score)
     if (title === query) {
       return 1.0;
     }
 
-    // Starts with
+    // Starts with (high score)
     if (title.startsWith(query)) {
       return 0.9;
     }
 
-    // Contains
+    // Contains (medium score)
     if (title.includes(query)) {
       return 0.7;
     }
 
-    // Subtitle match
+    // Subtitle match (lower score)
     if (subtitle.includes(query)) {
       return 0.5;
     }
 
-    // Fuzzy match (basic implementation)
-    const fuzzyScore = this.fuzzyMatch(query, title);
-    return fuzzyScore * 0.3;
-  }
-
-  /**
-   * Simple fuzzy matching
-   */
-  private fuzzyMatch(query: string, text: string): number {
-    let queryIndex = 0;
-    let textIndex = 0;
-    let matches = 0;
-
-    while (queryIndex < query.length && textIndex < text.length) {
-      if (query[queryIndex] === text[textIndex]) {
-        matches++;
-        queryIndex++;
-      }
-      textIndex++;
-    }
-
-    return matches / query.length;
+    // No match
+    return 0.0;
   }
 
   /**
@@ -710,6 +739,7 @@ interface PluginProviderProps {
 /**
  * Plugin system provider
  * Initializes and provides plugin system to React components
+ * FIX: Add cleanup on unmount
  */
 export function PluginProvider({ config, children }: PluginProviderProps): React.JSX.Element {
   const [context, setContext] = useState<PluginSystemContext | null>(null);
@@ -730,6 +760,13 @@ export function PluginProvider({ config, children }: PluginProviderProps): React
       .catch((error) => {
         console.error('Failed to initialize plugin system:', error);
       });
+
+    // Cleanup on unmount
+    return () => {
+      registry.shutdown().catch((error) => {
+        console.error('Failed to shutdown plugin registry:', error);
+      });
+    };
   }, [config]);
 
   if (!context) {
@@ -755,6 +792,80 @@ export function usePluginSystem(): PluginSystemContext {
 
   return context;
 }
+```
+
+### components/plugin-error-boundary.tsx
+
+```typescript
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+interface Props {
+  children: ReactNode;
+  pluginId?: string;
+  fallback?: ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+}
+
+/**
+ * Error Boundary for plugin components
+ * FIX: Critical for preventing plugin crashes from breaking the entire app
+ */
+export class PluginErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    const pluginId = this.props.pluginId || 'unknown';
+    console.error(`Plugin "${pluginId}" error:`, error, errorInfo);
+
+    // TODO: Send error to telemetry/logging service
+  }
+
+  render(): ReactNode {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      return (
+        <div style={{ padding: '1rem', color: 'red' }}>
+          <h3>Plugin Error</h3>
+          <p>
+            {this.props.pluginId
+              ? `The "${this.props.pluginId}" plugin encountered an error.`
+              : 'A plugin encountered an error.'}
+          </p>
+          {this.state.error && (
+            <pre style={{ fontSize: '0.875rem', overflow: 'auto' }}>
+              {this.state.error.message}
+            </pre>
+          )}
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+**Usage:**
+
+```typescript
+// Wrap plugin UI components with error boundary
+<PluginErrorBoundary pluginId={plugin.manifest.id}>
+  <PluginComponent />
+</PluginErrorBoundary>
 ```
 
 ## Testing Requirements

@@ -194,7 +194,8 @@ pub struct ClipboardItem {
     /// Clipboard text content
     pub content: String,
 
-    /// Timestamp when added
+    /// Timestamp when added (serialized as RFC3339/ISO 8601 string)
+    /// Example: "2025-10-22T15:30:00Z"
     pub timestamp: DateTime<Utc>,
 }
 
@@ -321,22 +322,20 @@ mod tests {
 use crate::models::error::{NixedError, NixedResult};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
 use tokio::fs;
 
 /// Manages persistent storage for plugins
+/// SIMPLIFIED: No caching initially (YAGNI principle)
+/// Add caching later if performance issues arise
+#[derive(Clone)]
 pub struct StorageManager {
     storage_path: PathBuf,
-    cache: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
 }
 
 impl StorageManager {
     /// Create a new storage manager
     pub fn new(storage_path: PathBuf) -> Self {
-        Self {
-            storage_path,
-            cache: Arc::new(RwLock::new(HashMap::new())),
-        }
+        Self { storage_path }
     }
 
     /// Initialize storage directory
@@ -348,98 +347,59 @@ impl StorageManager {
 
     /// Get value from plugin storage
     pub async fn get(&self, plugin_id: &str, key: &str) -> NixedResult<Option<String>> {
-        // Check cache first
-        {
-            let cache = self.cache.read().unwrap();
-            if let Some(plugin_storage) = cache.get(plugin_id) {
-                if let Some(value) = plugin_storage.get(key) {
-                    return Ok(Some(value.clone()));
-                }
-            }
-        }
-
-        // Load from disk if not in cache
-        self.load_plugin_storage(plugin_id).await?;
-
-        let cache = self.cache.read().unwrap();
-        Ok(cache
-            .get(plugin_id)
-            .and_then(|storage| storage.get(key).cloned()))
+        let storage = self.load_plugin_storage(plugin_id).await?;
+        Ok(storage.get(key).cloned())
     }
 
     /// Set value in plugin storage
     pub async fn set(&self, plugin_id: &str, key: &str, value: String) -> NixedResult<()> {
-        // Update cache
-        {
-            let mut cache = self.cache.write().unwrap();
-            cache
-                .entry(plugin_id.to_string())
-                .or_insert_with(HashMap::new)
-                .insert(key.to_string(), value);
-        }
-
-        // Persist to disk
-        self.save_plugin_storage(plugin_id).await
+        let mut storage = self.load_plugin_storage(plugin_id).await?;
+        storage.insert(key.to_string(), value);
+        self.save_plugin_storage(plugin_id, &storage).await
     }
 
     /// Remove value from plugin storage
     pub async fn remove(&self, plugin_id: &str, key: &str) -> NixedResult<()> {
-        {
-            let mut cache = self.cache.write().unwrap();
-            if let Some(plugin_storage) = cache.get_mut(plugin_id) {
-                plugin_storage.remove(key);
-            }
-        }
-
-        self.save_plugin_storage(plugin_id).await
+        let mut storage = self.load_plugin_storage(plugin_id).await?;
+        storage.remove(key);
+        self.save_plugin_storage(plugin_id, &storage).await
     }
 
     /// Clear all storage for a plugin
     pub async fn clear_plugin(&self, plugin_id: &str) -> NixedResult<()> {
-        {
-            let mut cache = self.cache.write().unwrap();
-            cache.remove(plugin_id);
-        }
-
         let file_path = self.get_plugin_storage_path(plugin_id);
         if file_path.exists() {
             fs::remove_file(file_path)
                 .await
                 .map_err(|e| NixedError::Storage(format!("Failed to delete storage file: {}", e)))?;
         }
-
         Ok(())
     }
 
-    /// Load plugin storage from disk into cache
-    async fn load_plugin_storage(&self, plugin_id: &str) -> NixedResult<()> {
+    /// Load plugin storage from disk
+    async fn load_plugin_storage(&self, plugin_id: &str) -> NixedResult<HashMap<String, String>> {
         let file_path = self.get_plugin_storage_path(plugin_id);
 
         if !file_path.exists() {
-            return Ok(());
+            return Ok(HashMap::new());
         }
 
         let content = fs::read_to_string(&file_path)
             .await
             .map_err(|e| NixedError::Storage(format!("Failed to read storage file: {}", e)))?;
 
-        let storage: HashMap<String, String> = serde_json::from_str(&content)
-            .map_err(|e| NixedError::Storage(format!("Failed to parse storage file: {}", e)))?;
-
-        let mut cache = self.cache.write().unwrap();
-        cache.insert(plugin_id.to_string(), storage);
-
-        Ok(())
+        serde_json::from_str(&content)
+            .map_err(|e| NixedError::Storage(format!("Failed to parse storage file: {}", e)))
     }
 
     /// Save plugin storage to disk
-    async fn save_plugin_storage(&self, plugin_id: &str) -> NixedResult<()> {
-        let cache = self.cache.read().unwrap();
-        let storage = cache.get(plugin_id).cloned().unwrap_or_default();
-        drop(cache);
-
+    async fn save_plugin_storage(
+        &self,
+        plugin_id: &str,
+        storage: &HashMap<String, String>,
+    ) -> NixedResult<()> {
         let file_path = self.get_plugin_storage_path(plugin_id);
-        let content = serde_json::to_string_pretty(&storage)
+        let content = serde_json::to_string_pretty(storage)
             .map_err(|e| NixedError::Storage(format!("Failed to serialize storage: {}", e)))?;
 
         fs::write(&file_path, content)
@@ -503,6 +463,13 @@ mod tests {
 
         assert_eq!(value_a, Some("value-a".to_string()));
         assert_eq!(value_b, Some("value-b".to_string()));
+    }
+
+    #[test]
+    fn test_clone() {
+        // Verify StorageManager can be cloned (required for sharing across threads)
+        let manager = StorageManager::new(PathBuf::from("/tmp/test"));
+        let _cloned = manager.clone();
     }
 }
 ```
