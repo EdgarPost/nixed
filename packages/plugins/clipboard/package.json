@@ -1,0 +1,67 @@
+{
+  "name": "@nixed/plugin-clipboard",
+  "version": "0.1.0",
+  "description": "Clipboard history plugin for Nixed",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.tsx --format cjs,esm --dts",
+    "dev": "tsup src/index.tsx --format cjs,esm --dts --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "nixed": {
+    "id": "clipboard",
+    "name": "Clipboard History",
+    "description": "Access and search clipboard history",
+    "version": "0.1.0",
+    "author": "Nixed Team",
+    "icon": "📋",
+    "commands": [
+      {
+        "name": "search-clipboard",
+        "title": "Search Clipboard History",
+        "description": "Search and paste from clipboard history",
+        "mode": "view",
+        "shortcut": "clip",
+        "keywords": ["clipboard", "copy", "paste", "history"]
+      }
+    ],
+    "preferences": [
+      {
+        "id": "maxItems",
+        "title": "Maximum History Items",
+        "description": "Number of clipboard items to keep in history",
+        "type": "number",
+        "default": 100,
+        "min": 10,
+        "max": 1000
+      },
+      {
+        "id": "monitorInterval",
+        "title": "Monitor Interval (ms)",
+        "description": "How often to check clipboard for changes",
+        "type": "number",
+        "default": 1000,
+        "min": 500,
+        "max": 5000
+      }
+    ]
+  },
+  "dependencies": {
+    "@nixed/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0",
+    "@vitest/coverage-v8": "^1.0.0"
+  }
+}
