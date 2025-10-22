@@ -1,4 +1,4 @@
-import type { Plugin, PluginContext } from '@nixed/sdk';
+import type { PluginContext } from '@nixed/sdk';
 import type { RegisteredPlugin, PluginRegistryState, PluginError } from '../types/plugin-registry.types';
 import type { AppConfig } from '../types/config.types';
 import { PluginLoader } from './plugin-loader';

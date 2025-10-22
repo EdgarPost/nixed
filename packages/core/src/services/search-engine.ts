@@ -1,4 +1,4 @@
-import type { SearchQuery, SearchResult } from '@nixed/sdk';
+import type { SearchQuery } from '@nixed/sdk';
 import type { SearchContext, RankedSearchResult } from '../types/search.types';
 import { PluginRegistry } from './plugin-registry';
 

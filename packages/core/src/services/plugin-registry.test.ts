@@ -52,7 +52,7 @@ describe('PluginRegistry', () => {
 
       const plugins = registry.getAllPlugins();
       expect(plugins).toHaveLength(1);
-      expect(plugins[0].manifest.id).toBe('test-plugin');
+      expect(plugins[0]!.manifest.id).toBe('test-plugin');
       expect(mockPlugin.onLoad).toHaveBeenCalled();
     });
 
@@ -91,8 +91,8 @@ describe('PluginRegistry', () => {
 
       const errors = registry.getErrors();
       expect(errors).toHaveLength(1);
-      expect(errors[0].pluginId).toBe('failing-plugin');
-      expect(errors[0].message).toContain('Failed to register plugin');
+      expect(errors[0]!.pluginId).toBe('failing-plugin');
+      expect(errors[0]!.message).toContain('Failed to register plugin');
     });
   });
 
@@ -166,7 +166,7 @@ describe('PluginRegistry', () => {
 
       const enabledPlugins = registry.getEnabledPlugins();
       expect(enabledPlugins).toHaveLength(1);
-      expect(enabledPlugins[0].manifest.id).toBe('enabled-plugin');
+      expect(enabledPlugins[0]!.manifest.id).toBe('enabled-plugin');
     });
   });
 

@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { SearchResult } from '@nixed/sdk';
-import { PluginContextReact } from '@nixed/sdk';
 import { SearchInput } from './SearchInput';
 import { SearchResults } from './SearchResults';
 import { useKeyboardNavigation } from '../../hooks/useKeyboardNavigation';
+import { useDebounce } from '../../hooks/useDebounce';
+import { usePluginSystem } from '../../contexts/plugin-context';
 
 /**
  * Main launcher window component
@@ -14,40 +15,35 @@ export function LauncherWindow() {
   const [searchValue, setSearchValue] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
 
-  // Plugin context configuration
-  const pluginContext = {
-    pluginId: 'nixed.launcher',
-    preferences: {},
-    isDevelopment: import.meta.env.DEV,
-  };
+  // Get plugin system
+  const { searchEngine, ready } = usePluginSystem();
 
-  // Handle search query
-  const handleSearch = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setResults([]);
+  // Debounce search query
+  const debouncedQuery = useDebounce(searchValue, 300);
+
+  // Perform search when debounced query changes
+  useEffect(() => {
+    if (!ready) {
       return;
     }
 
-    try {
-      // TODO: Call Tauri command to search plugins
-      // For now, create mock results
-      const mockResults: SearchResult[] = [
-        {
-          id: '1',
-          title: 'Example Result',
-          subtitle: 'This is a placeholder result',
-          icon: '🔍',
-          onAction: async () => {
-            console.log('Action executed');
-          },
-        },
-      ];
-      setResults(mockResults);
-    } catch (error) {
-      console.error('Search error:', error);
-      setResults([]);
-    }
-  }, []);
+    const performSearch = async () => {
+      if (!debouncedQuery.trim()) {
+        setResults([]);
+        return;
+      }
+
+      try {
+        const searchResults = await searchEngine.search(debouncedQuery);
+        setResults(searchResults);
+      } catch (error) {
+        console.error('Search error:', error);
+        setResults([]);
+      }
+    };
+
+    performSearch();
+  }, [debouncedQuery, searchEngine, ready]);
 
   // Execute selected result action
   const executeAction = useCallback(
@@ -100,25 +96,23 @@ export function LauncherWindow() {
   );
 
   return (
-    <PluginContextReact.Provider value={pluginContext}>
-      <div className="min-h-screen bg-gray-900 flex items-start justify-center pt-32">
-        <div className="w-full max-w-2xl bg-gray-800 rounded-lg shadow-2xl overflow-hidden">
-          {/* Search Input */}
-          <SearchInput
-            value={searchValue}
-            onChange={setSearchValue}
-            onSearch={handleSearch}
-            placeholder="Search for apps, files, and more..."
-          />
+    <div className="min-h-screen bg-gray-900 flex items-start justify-center pt-32">
+      <div className="w-full max-w-2xl bg-gray-800 rounded-lg shadow-2xl overflow-hidden">
+        {/* Search Input */}
+        <SearchInput
+          value={searchValue}
+          onChange={setSearchValue}
+          onSearch={() => {}} // Search is handled by useEffect
+          placeholder="Search for apps, files, and more..."
+        />
 
-          {/* Search Results */}
-          <SearchResults
-            results={results}
-            selectedIndex={selectedIndex}
-            onSelectResult={handleSelectResult}
-          />
-        </div>
+        {/* Search Results */}
+        <SearchResults
+          results={results}
+          selectedIndex={selectedIndex}
+          onSelectResult={handleSelectResult}
+        />
       </div>
-    </PluginContextReact.Provider>
+    </div>
   );
 }

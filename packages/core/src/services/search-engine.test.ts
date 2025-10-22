@@ -273,8 +273,8 @@ describe('SearchEngine', () => {
 
       const results = await searchEngine.search('test');
 
-      expect(results[0].id).toBe('exact');
-      expect(results[0].score).toBeGreaterThan(results[1].score);
+      expect(results[0]!.id).toBe('exact');
+      expect(results[0]!.score).toBeGreaterThan(results[1]!.score);
     });
 
     it('should rank starts-with matches higher than contains', async () => {
@@ -316,8 +316,8 @@ describe('SearchEngine', () => {
 
       const results = await searchEngine.search('test');
 
-      expect(results[0].id).toBe('starts');
-      expect(results[0].score).toBeGreaterThan(results[1].score);
+      expect(results[0]!.id).toBe('starts');
+      expect(results[0]!.score).toBeGreaterThan(results[1]!.score);
     });
 
     it('should sort by priority when scores are equal', async () => {
@@ -381,8 +381,8 @@ describe('SearchEngine', () => {
 
       const results = await searchEngine.search('test');
 
-      expect(results[0].pluginId).toBe('calculator');
-      expect(results[0].priority).toBeGreaterThan(results[1].priority);
+      expect(results[0]!.pluginId).toBe('calculator');
+      expect(results[0]!.priority).toBeGreaterThan(results[1]!.priority);
     });
   });
 });
