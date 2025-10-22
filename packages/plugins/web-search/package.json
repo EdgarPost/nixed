@@ -1,0 +1,63 @@
+{
+  "name": "@nixed/plugin-web-search",
+  "version": "0.1.0",
+  "description": "Web search fallback plugin for Nixed",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "nixed": {
+    "id": "web-search",
+    "name": "Web Search",
+    "description": "Search the web when no results found",
+    "version": "0.1.0",
+    "author": "Nixed Team",
+    "icon": "🔍",
+    "commands": [
+      {
+        "name": "web-search",
+        "title": "Search Web",
+        "description": "Search the web with your query",
+        "mode": "no-view",
+        "keywords": ["search", "google", "web"]
+      }
+    ],
+    "preferences": [
+      {
+        "id": "engine",
+        "title": "Search Engine",
+        "description": "Default search engine to use",
+        "type": "dropdown",
+        "default": "google",
+        "options": [
+          { "label": "Google", "value": "google" },
+          { "label": "DuckDuckGo", "value": "duckduckgo" },
+          { "label": "Bing", "value": "bing" }
+        ]
+      },
+      {
+        "id": "alwaysShow",
+        "title": "Always Show",
+        "description": "Always show web search option, even with other results",
+        "type": "checkbox",
+        "default": true,
+        "label": "Show web search option"
+      }
+    ]
+  },
+  "dependencies": {
+    "@nixed/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
