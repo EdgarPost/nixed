@@ -10,7 +10,7 @@ export class ExpressionEvaluator {
 
   constructor(private precision: number = 6) {
     // Create isolated mathjs instance with limited scope
-    this.math = create(all, {
+    this.math = create(all as any, {
       number: 'BigNumber',
       precision: 64,
     });
